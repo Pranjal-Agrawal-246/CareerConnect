@@ -1,0 +1,23 @@
+const express = require('express');
+const { body } = require('express-validator');
+const router = express.Router();
+const {
+  register,
+  login,
+  getMe,
+  updateProfile
+} = require('../controllers/authController');
+const { protect } = require('../middleware/auth');
+
+router.post('/register', [
+  body('name').notEmpty().withMessage('Name is required'),
+  body('email').isEmail().withMessage('Please provide a valid email'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('role').isIn(['jobseeker', 'employer']).withMessage('Role must be jobseeker or employer')
+], register);
+
+router.post('/login', login);
+router.get('/me', protect, getMe);
+router.put('/profile', protect, updateProfile);
+
+module.exports = router;

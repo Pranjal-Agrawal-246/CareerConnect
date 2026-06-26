@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post a Job - JobPortal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">JobPortal</a>
+      <div class="nav-links">
+        <a href="index.html">Jobs</a>
+        <a href="dashboard.html">Dashboard</a>
+        <span id="user-name"></span>
+        <a href="#" onclick="auth.logout(); return false;">Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container mt-3">
+    <div class="card" style="max-width: 700px; margin: 0 auto;">
+      <h2 id="form-title">Post a New Job</h2>
+      <form id="job-form" class="mt-2">
+        <div class="form-group">
+          <label for="title">Job Title *</label>
+          <input type="text" id="title" name="title" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label for="description">Job Description *</label>
+          <textarea id="description" name="description" class="form-control" rows="6" required></textarea>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label for="location">Location *</label>
+            <input type="text" id="location" name="location" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label for="jobType">Job Type *</label>
+            <select id="jobType" name="jobType" class="form-control" required>
+              <option value="full-time">Full Time</option>
+              <option value="part-time">Part Time</option>
+              <option value="contract">Contract</option>
+              <option value="internship">Internship</option>
+              <option value="remote">Remote</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label for="experience">Experience Level *</label>
+            <select id="experience" name="experience" class="form-control" required>
+              <option value="entry">Entry Level</option>
+              <option value="mid">Mid Level</option>
+              <option value="senior">Senior Level</option>
+              <option value="lead">Lead</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="deadline">Application Deadline</label>
+            <input type="date" id="deadline" name="deadline" class="form-control">
+          </div>
+        </div>
+
+        <div class="grid grid-2">
+          <div class="form-group">
+            <label for="salaryMin">Salary Min</label>
+            <input type="number" id="salaryMin" name="salaryMin" class="form-control">
+          </div>
+          <div class="form-group">
+            <label for="salaryMax">Salary Max</label>
+            <input type="number" id="salaryMax" name="salaryMax" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="skills">Required Skills (comma separated)</label>
+          <input type="text" id="skills" name="skills" class="form-control" placeholder="JavaScript, React, Node.js">
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="isActive" name="isActive" checked> Job is Active
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Post Job</button>
+        <a href="dashboard.html" class="btn btn-secondary">Cancel</a>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let editId = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireEmployer()) return;
+      
+      // Check if editing
+      editId = app.getUrlParam('edit');
+      if (editId) {
+        document.getElementById('form-title').textContent = 'Edit Job';
+        await loadJobData(editId);
+      }
+    });
+
+    async function loadJobData(jobId) {
+      try {
+        const response = await api.jobs.getOne(jobId);
+        const job = response.data;
+        
+        document.getElementById('title').value = job.title;
+        document.getElementById('description').value = job.description;
+        document.getElementById('location').value = job.location;
+        document.getElementById('jobType').value = job.jobType;
+        document.getElementById('experience').value = job.experience;
+        document.getElementById('salaryMin').value = job.salary?.min || '';
+        document.getElementById('salaryMax').value = job.salary?.max || '';
+        document.getElementById('skills').value = job.skills?.join(', ') || '';
+        document.getElementById('isActive').checked = job.isActive;
+        if (job.deadline) {
+          document.getElementById('deadline').value = job.deadline.split('T')[0];
+        }
+      } catch (error) {
+        app.showAlert(error.message, 'danger');
+      }
+    }
+
+    app.handleForm('job-form', async (data) => {
+      // Process data
+      const jobData = {
+        title: data.title,
+        description: data.description,
+        location: data.location,
+        jobType: data.jobType,
+        experience: data.experience,
+        isActive: document.getElementById('isActive').checked,
+        skills: data.skills ? data.skills.split(',').map(s => s.trim()).filter(s => s) : []
+      };
+
+      if (data.salaryMin || data.salaryMax) {
+        jobData.salary = {
+          min: parseInt(data.salaryMin) || 0,
+          max: parseInt(data.salaryMax) || 0,
+          currency: 'USD'
+        };
+      }
+
+      if (data.deadline) {
+        jobData.deadline = data.deadline;
+      }
+
+      if (editId) {
+        await api.jobs.update(editId, jobData);
+        app.showAlert('Job updated successfully', 'success');
+      } else {
+        await api.jobs.create(jobData);
+        app.showAlert('Job posted successfully', 'success');
+      }
+      
+      setTimeout(() => {
+        window.location.href = 'dashboard.html';
+      }, 1500);
+    });
+  </script>
+</body>
+</html>

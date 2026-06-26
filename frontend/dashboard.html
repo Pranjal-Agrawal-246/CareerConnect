@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - JobPortal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <a href="index.html" class="logo">JobPortal</a>
+      <div class="nav-links">
+        <a href="index.html">Jobs</a>
+        <div id="user-nav">
+          <a href="dashboard.html">Dashboard</a>
+          <span id="user-name"></span>
+          <a href="#" onclick="auth.logout(); return false;">Logout</a>
+        </div>
+        <div id="employer-nav" class="hidden">
+          <a href="post-job.html" class="btn btn-primary btn-sm">Post a Job</a>
+        </div>
+        <div id="jobseeker-nav" class="hidden"></div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dashboard container">
+    <div class="dashboard-header">
+      <h1>Dashboard</h1>
+    </div>
+
+    <!-- Stats -->
+    <div id="stats-container" class="stats-grid"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="main" onclick="switchTab('main')">
+        <span id="main-tab-label">Overview</span>
+      </div>
+      <div class="tab" data-tab="profile" onclick="switchTab('profile')">Profile</div>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="main-content"></div>
+    <div id="profile-content" class="hidden">
+      <div class="card">
+        <h3>Update Profile</h3>
+        <form id="profile-form" class="mt-2">
+          <div class="form-group">
+            <label for="profile-name">Name</label>
+            <input type="text" id="profile-name" name="name" class="form-control">
+          </div>
+          <div id="profile-skills-group" class="form-group hidden">
+            <label for="profile-skills">Skills</label>
+            <input type="text" id="profile-skills" name="skills" class="form-control">
+          </div>
+          <div id="profile-company-group" class="form-group hidden">
+            <label for="profile-company">Company</label>
+            <input type="text" id="profile-company" name="company" class="form-control">
+          </div>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Modal -->
+  <div id="application-modal" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Application Details</h3>
+        <button class="modal-close" onclick="app.closeModal('application-modal')">&times;</button>
+      </div>
+      <div id="application-modal-content"></div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/jobs.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (!auth.requireAuth()) return;
+      
+      loadDashboard();
+    });
+
+    async function loadDashboard() {
+      if (auth.isEmployer()) {
+        loadEmployerDashboard();
+      } else {
+        loadJobseekerDashboard();
+      }
+      loadProfile();
+    }
+
+    async function loadEmployerDashboard() {
+      document.getElementById('main-tab-label').textContent = 'My Jobs';
+      
+      try {
+        const response = await api.jobs.getEmployerJobs();
+        const jobs = response.data;
+        
+        // Stats
+        document.getElementById('stats-container').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${jobs.length}</div>
+            <div class="stat-label">Posted Jobs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${jobs.filter(j => j.isActive).length}</div>
+            <div class="stat-label">Active Jobs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${jobs.reduce((acc, j) => acc + j.applicationsCount, 0)}</div>
+            <div class="stat-label">Total Applications</div>
+          </div>
+        `;
+        
+        // Jobs list
+        if (jobs.length === 0) {
+          document.getElementById('main-content').innerHTML = `
+            <div class="empty-state">
+              <h3>No jobs posted yet</h3>
+              <p>Start by posting your first job</p>
+              <a href="post-job.html" class="btn btn-primary mt-2">Post a Job</a>
+            </div>
+          `;
+        } else {
+          document.getElementById('main-content').innerHTML = jobs.map(job => `
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">${jobs.escapeHtml ? jobs.escapeHtml(job.title) : job.title}</h3>
+                  <p class="card-subtitle">${job.applicationsCount} applications</p>
+                </div>
+                <span class="badge ${job.isActive ? 'badge-success' : 'badge-warning'}">
+                  ${job.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <div>
+                <button class="btn btn-sm btn-secondary" onclick="viewApplications('${job._id}')">
+                  View Applications
+                </button>
+                <a href="post-job.html?edit=${job._id}" class="btn btn-sm btn-outline">Edit</a>
+                <button class="btn btn-sm btn-danger" onclick="deleteJob('${job._id}')">Delete</button>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        app.showAlert(error.message, 'danger');
+      }
+    }
+
+    async function loadJobseekerDashboard() {
+      document.getElementById('main-tab-label').textContent = 'My Applications';
+      
+      try {
+        const response = await api.applications.getMyApplications();
+        const applications = response.data;
+        
+        // Stats
+        document.getElementById('stats-container').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${applications.length}</div>
+            <div class="stat-label">Applications</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${applications.filter(a => a.status === 'shortlisted').length}</div>
+            <div class="stat-label">Shortlisted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${applications.filter(a => a.status === 'pending').length}</div>
+            <div class="stat-label">Pending</div>
+          </div>
+        `;
+        
+        // Applications list
+        if (applications.length === 0) {
+          document.getElementById('main-content').innerHTML = `
+            <div class="empty-state">
+              <h3>No applications yet</h3>
+              <p>Start applying for jobs</p>
+              <a href="index.html" class="btn btn-primary mt-2">Browse Jobs</a>
+            </div>
+          `;
+        } else {
+          document.getElementById('main-content').innerHTML = applications.map(application => `
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <h3 class="card-title">${application.job?.title || 'Job Removed'}</h3>
+                  <p class="card-subtitle">${application.job?.company || ''}</p>
+                </div>
+                ${app.getStatusBadge(application.status)}
+              </div>
+              <p class="card-subtitle">Applied ${app.formatDate(application.appliedAt)}</p>
+              <div class="mt-1">
+                ${application.job ? `<a href="job-details.html?id=${application.job._id}" class="btn btn-sm btn-outline">View Job</a>` : ''}
+                <button class="btn btn-sm btn-danger" onclick="withdrawApplication('${application._id}')">Withdraw</button>
+              </div>
+            </div>
+          `).join('');
+        }
+      } catch (error) {
+        app.showAlert(error.message, 'danger');
+      }
+    }
+
+    function loadProfile() {
+      document.getElementById('profile-name').value = auth.user.name;
+      
+      if (auth.isJobseeker()) {
+        document.getElementById('profile-skills-group').classList.remove('hidden');
+        document.getElementById('profile-skills').value = auth.user.skills?.join(', ') || '';
+      } else {
+        document.getElementById('profile-company-group').classList.remove('hidden');
+        document.getElementById('profile-company').value = auth.user.company || '';
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
+      
+      document.getElementById('main-content').classList.toggle('hidden', tab !== 'main');
+      document.getElementById('profile-content').classList.toggle('hidden', tab !== 'profile');
+    }
+
+    async function viewApplications(jobId) {
+      try {
+        const response = await api.applications.getJobApplications(jobId);
+        const applications = response.data;
+        
+        let content = '';
+        if (applications.length === 0) {
+          content = '<p>No applications yet.</p>';
+        } else {
+          content = applications.map(app => `
+            <div class="card">
+              <div class="card-header">
+                <div>
+                  <strong>${app.applicant?.name}</strong>
+                  <p class="card-subtitle">${app.applicant?.email}</p>
+                </div>
+                ${window.app.getStatusBadge(app.status)}
+              </div>
+              <p><strong>Skills:</strong> ${app.applicant?.skills?.join(', ') || 'Not specified'}</p>
+              ${app.coverLetter ? `<p><strong>Cover Letter:</strong> ${app.coverLetter}</p>` : ''}
+              <div class="mt-1">
+                <select onchange="updateStatus('${app._id}', this.value)" class="form-control" style="display: inline; width: auto;">
+                  <option value="pending" ${app.status === 'pending' ? 'selected' : ''}>Pending</option>
+                  <option value="reviewed" ${app.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
+                  <option value="shortlisted" ${app.status === 'shortlisted' ? 'selected' : ''}>Shortlisted</option>
+                  <option value="rejected" ${app.status === 'rejected' ? 'selected' : ''}>Rejected</option>
+                  <option value="hired" ${app.status === 'hired' ? 'selected' : ''}>Hired</option>
+                </select>
+              </div>
+            </div>
+          `).join('');
+        }
+        
+        document.getElementById('application-modal-content').innerHTML = content;
+        window.app.openModal('application-modal');
+      } catch (error) {
+        window.app.showAlert(error.message, 'danger');
+      }
+    }
+
+    async function updateStatus(applicationId, status) {
+      try {
+        await api.applications.updateStatus(applicationId, status);
+        window.app.showAlert('Status updated', 'success');
+      } catch (error) {
+        window.app.showAlert(error.message, 'danger');
+      }
+    }
+
+    async function deleteJob(jobId) {
+      if (!confirm('Are you sure you want to delete this job?')) return;
+      
+      try {
+        await api.jobs.delete(jobId);
+        window.app.showAlert('Job deleted', 'success');
+        loadEmployerDashboard();
+      } catch (error) {
+        window.app.showAlert(error.message, 'danger');
+      }
+    }
+
+    async function withdrawApplication(applicationId) {
+      if (!confirm('Are you sure you want to withdraw this application?')) return;
+      
+      try {
+        await api.applications.withdraw(applicationId);
+        window.app.showAlert('Application withdrawn', 'success');
+        loadJobseekerDashboard();
+      } catch (error) {
+        window.app.showAlert(error.message, 'danger');
+      }
+    }
+
+    // Profile form
+    app.handleForm('profile-form', async (data) => {
+      if (data.skills) {
+        data.skills = data.skills.split(',').map(s => s.trim()).filter(s => s);
+      }
+      
+      const response = await api.auth.updateProfile(data);
+      localStorage.setItem('user', JSON.stringify(response.data));
+      auth.user = response.data;
+      auth.updateUI();
+      window.app.showAlert('Profile updated', 'success');
+    });
+  </script>
+</body>
+</html>
